@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
+const mockAuth = require("./middleware/auth");
 const patientRoutes = require("./routes/patients");
+const visitRoutes = require("./routes/visits");
 
 const app = express();
 
@@ -13,6 +15,8 @@ app.use(express.json());
 
 // Routes
 app.use("/patients", patientRoutes);
+app.use("/visits", visitRoutes);
+app.use(mockAuth);
 
 // Default route
 app.get("/", (req, res) => {
