@@ -4,6 +4,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const Visit = require("../models/VisitSchema");
 const Patient = require("../models/PatientSchema");
+const PDFDocument = require("pdfkit");
 
 // Create a new visit for a patient
 router.post("/:patientId", async (req, res) => {
@@ -113,6 +114,87 @@ router.get("/visit/:id", async (req, res) => {
     res.json(visit);
   } catch (err) {
     console.error("GET /visits/visit/:id error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+//  Generate PDF receipt for a visit
+router.get("/visit/:id/receipt", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid visit id" });
+    }
+
+    const visit = await Visit.findById(id).populate("patientId");
+    if (!visit) return res.status(404).json({ error: "Visit not found" });
+
+    // Setup PDF headers
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=receipt_${id}.pdf`
+    );
+
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(18).text("Amrit Clinic", { align: "center" });
+    doc.moveDown(0.5);
+    doc.fontSize(12).text("Visit Receipt", { align: "center" });
+    doc.moveDown();
+
+    // Patient info
+    const patient = visit.patientId || {};
+    doc.fontSize(10).text(`Patient: ${patient.name || "N/A"}`);
+    doc.text(`Phone: ${patient.phone || "N/A"}`);
+    doc.text(`Visit Date: ${new Date(visit.createdAt).toLocaleDateString()}`);
+    doc.moveDown();
+
+    // Visit details
+    if (visit.diagnosis) doc.text(`Diagnosis: ${visit.diagnosis}`);
+    if (visit.symptoms) doc.text(`Symptoms: ${visit.symptoms}`);
+    doc.moveDown();
+
+    // Prescriptions
+    if (Array.isArray(visit.prescriptions) && visit.prescriptions.length) {
+      doc.fontSize(12).text("Prescriptions:");
+      visit.prescriptions.forEach((p, i) => {
+        doc
+          .fontSize(10)
+          .text(
+            `${i + 1}. ${p.name || p.medicineName} - ${p.dose || ""} (${
+              p.duration || ""
+            })`
+          );
+      });
+      doc.moveDown();
+    }
+
+    // Bill
+    if (visit.bill && Array.isArray(visit.bill.items)) {
+      doc.fontSize(12).text("Bill:");
+      visit.bill.items.forEach((item) => {
+        doc.fontSize(10).text(`${item.desc || "Item"} - ₹${item.amount || 0}`);
+      });
+      doc.moveDown();
+      doc
+        .fontSize(12)
+        .text(`Total: ₹${visit.bill.total || 0}`, { align: "right" });
+      doc.text(`Payment Status: ${visit.bill.paymentStatus || "pending"}`, {
+        align: "right",
+      });
+    }
+
+    doc.moveDown(2);
+    doc
+      .fontSize(9)
+      .text("Thank you for visiting Amrit Clinic", { align: "center" });
+
+    doc.end();
+  } catch (err) {
+    console.error("GET /visits/visit/:id/receipt error:", err);
     res.status(500).json({ error: err.message });
   }
 });
