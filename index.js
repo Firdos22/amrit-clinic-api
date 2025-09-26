@@ -3,9 +3,11 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
-const mockAuth = require("./middleware/auth");
+const authRoutes = require("./routes/auth");
+const errorHandler = require("./middleware/errorHandler");
 const patientRoutes = require("./routes/patients");
 const visitRoutes = require("./routes/visits");
+// const paymentRoutes = require("./routes/payments");
 
 const app = express();
 
@@ -16,13 +18,16 @@ app.use(express.json());
 // Routes
 app.use("/patients", patientRoutes);
 app.use("/visits", visitRoutes);
-app.use(mockAuth);
+app.use("/auth", authRoutes);
+// app.use("/payments", paymentRoutes);
+// app.use(mockAuth);
 
 // Default route
 app.get("/", (req, res) => {
   res.send("Amrit Clinic API is running 🚀");
 });
 
+app.use(errorHandler);
 // Start server
 const PORT = process.env.PORT || 5000;
 mongoose

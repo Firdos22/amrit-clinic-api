@@ -5,9 +5,11 @@ const mongoose = require("mongoose");
 const Visit = require("../models/VisitSchema");
 const Patient = require("../models/PatientSchema");
 const PDFDocument = require("pdfkit");
+const authJwt = require("../middleware/authJwt");
+const requireRole = require("../middleware/requireRole");
 
 // Create a new visit for a patient
-router.post("/:patientId", async (req, res) => {
+router.post("/:patientId", authJwt, async (req, res) => {
   try {
     const { patientId } = req.params;
     const { symptoms, diagnosis, prescriptions, bill } = req.body;
@@ -198,5 +200,20 @@ router.get("/visit/:id/receipt", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.delete(
+  "/:id",
+  authJwt,
+  requireRole("doctor", "admin"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      await Visit.findByIdAndDelete(id);
+      res.json({ message: "Visit deleted" });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 module.exports = router;

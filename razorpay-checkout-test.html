@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Razorpay Checkout Test</title>
+  </head>
+  <body>
+    <h2>Razorpay Checkout Test</h2>
+
+    <!-- Put your public key here (test key id) or fetch from server -->
+     
+    <script>
+      const API_BASE = "http://localhost:5000"; // change if different or use ngrok url for remote
+      const RAZORPAY_KEY_ID = "rzp_test_YourKeyId"; // set your test key id or fetch from server
+      const patientId = ""; // optional if you need to create visit first
+      // you'll provide visitId to create order
+    </script>
+
+    <div>
+      <label>Visit ID: <input id="visitId" style="width: 400px" /></label>
+      <button id="pay">Create Order & Pay</button>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      document.getElementById("pay").addEventListener("click", async () => {
+        const visitId = document.getElementById("visitId").value.trim();
+        if (!visitId) return alert("Enter visitId");
+
+        // 1) create order on server
+        const createResp = await fetch(
+          `${API_BASE}/payments/create-order/${visitId}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+        if (!createResp.ok) {
+          const err = await createResp.json().catch(() => ({ error: "bad" }));
+          return alert(
+            "Create order failed: " + (err.error || createResp.status)
+          );
+        }
+        const { order } = await createResp.json();
+
+        // 2) open Razorpay Checkout
+        const options = {
+          key: RAZORPAY_KEY_ID, // public key
+          amount: order.amount,
+          currency: order.currency,
+          name: "Amrit Clinic",
+          description: "Visit payment",
+          order_id: order.id,
+          handler: async function (response) {
+            // response contains: razorpay_payment_id, razorpay_order_id, razorpay_signature
+            console.log("Checkout handler response", response);
+
+            // 3) Confirm payment on server (signature verification & mark paid)
+            const confirmResp = await fetch(`${API_BASE}/payments/confirm`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                visitId,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const result = await confirmResp.json();
+            if (confirmResp.ok) {
+              alert("Payment successful and confirmed on server");
+              console.log(result);
+            } else {
+              alert(
+                "Payment confirmation failed: " + (result.error || "unknown")
+              );
+              console.error(result);
+            }
+          },
+          prefill: {
+            name: "Test User",
+            email: "test@example.com",
+            contact: "9999999999",
+          },
+          theme: { color: "#528FF0" },
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on("payment.failed", function (response) {
+          alert(
+            "Payment failed: " + (response.error && response.error.description)
+          );
+          console.error("Payment failed", response);
+        });
+        rzp.open();
+      });
+    </script>
+  </body>
+</html>
